@@ -1,0 +1,163 @@
+{{define "content"}}
+{{$d := .Data}}
+<div class="title-row">
+  <h1>{{$d.Device.Name}}</h1>
+  <span class="pill {{if $d.Active}}good{{else}}unknown{{end}}">{{$d.State}}</span>
+  {{if $d.RevocationPending}}<span class="pill warn">revocation pending</span>{{end}}
+</div>
+
+{{if $d.ChangedSince}}<div class="banner warn" data-export-stale>Configuration changed since the last export (r{{$d.Export.Revision}} → r{{$d.Device.ProfileRevision}}). Devices do not poll the controller; use Update profile below and import the new profile.</div>{{end}}
+{{if $d.RevocationPending}}<div class="banner warn">At least one site where this device lost access has not acknowledged the change. Access there continues until it does.</div>{{end}}
+
+<div class="grid">
+<section class="card">
+  <h2>Identity</h2>
+  <dl class="facts">
+    <dt>Tunnel address</dt><dd><code>{{$d.Device.AssignedIPv4}}/32</code></dd>
+    <dt>Public key</dt><dd><code>{{$d.Device.PublicKey}}</code></dd>
+    <dt>Profile revision</dt><dd>r{{$d.Device.ProfileRevision}}</dd>
+    <dt>Last export</dt><dd>{{if $d.Export.Revision}}r{{$d.Export.Revision}}, {{ago $d.Export.At}} <span class="muted">(not proof of installation)</span>{{else}}never{{end}}</dd>
+    <dt>Client MTU</dt><dd>{{if $d.Device.ClientMTU}}{{$d.Device.ClientMTU}} (override){{else}}omitted; the client chooses{{end}}</dd>
+  </dl>
+  <form method="post" action="/devices/{{$d.Device.ID}}/rename" class="inline">
+    {{template "csrf" $.CSRF}}
+    <label for="rename">Name</label>
+    <input id="rename" name="name" value="{{$d.Device.Name}}" required maxlength="64">
+    <button type="submit" class="secondary">Rename</button>
+  </form>
+</section>
+
+<section class="card">
+  <h2>Diagnostics</h2>
+  {{if or $d.Warnings $d.Collisions}}
+  <ul class="plain">
+    {{range $d.Warnings}}<li><span class="pill warn">DNS</span> {{.}}</li>{{end}}
+    {{range $d.Collisions}}<li><span class="pill warn">subnet</span> {{.}}. While the device is on such a network, that site prefix may be unreachable.</li>{{end}}
+  </ul>
+  {{else}}<p class="muted">No configuration warnings.</p>{{end}}
+  <p class="hint">Use per-site status below to tell a tunnel problem (no handshake) from a gateway problem (site unhealthy or change pending).</p>
+</section>
+</div>
+
+<section class="card">
+  <h2>Site access</h2>
+  {{if $d.Links}}
+  <table>
+    <thead><tr><th>Site</th><th>Access</th><th>Site status</th><th>Last handshake here</th><th>Keepalive</th><th></th></tr></thead>
+    <tbody>
+    {{range $d.Links}}
+      <tr>
+        <td><a href="/sites/{{.Site.ID}}">{{.Site.Name}}</a></td>
+        <td>{{if .Effective}}<span class="pill good">effective</span>{{else if not .Link.Enabled}}<span class="pill unknown">removed</span>{{else}}<span class="pill unknown">inactive</span>{{end}}</td>
+        <td>{{template "reach" .Status.Reachability}} {{template "applied" .Status}}</td>
+        <td>{{if .SeenAtSite}}{{agoTime .LastHandshake}}{{else}}<span class="muted">not reported</span>{{end}}</td>
+        <td>
+          <form method="post" action="/links/{{.Link.ID}}/keepalive" class="inline compact">
+            {{template "csrf" $.CSRF}}<input type="hidden" name="device_id" value="{{$d.Device.ID}}">
+            <input name="keepalive" value="{{.Link.PersistentKeepalive}}" inputmode="numeric" aria-label="Keepalive seconds for {{.Site.Name}}" size="4">
+            <button type="submit" class="secondary">Set</button>
+          </form>
+        </td>
+        <td><div class="actions">
+          <form method="post" action="/links/{{.Link.ID}}/{{if .Link.Enabled}}disable{{else}}enable{{end}}" class="inline compact">
+            {{template "csrf" $.CSRF}}<input type="hidden" name="device_id" value="{{$d.Device.ID}}">
+            <button type="submit" class="{{if .Link.Enabled}}danger{{else}}secondary{{end}}">{{if .Link.Enabled}}Remove access{{else}}Restore access{{end}}</button>
+          </form>
+          <details>
+            <summary>Rotate PSK</summary>
+            <form method="post" action="/links/{{.Link.ID}}/rotate-psk">
+              {{template "csrf" $.CSRF}}<input type="hidden" name="device_id" value="{{$d.Device.ID}}">
+              <p class="hint">The link to {{.Site.Name}} stops working until the gateway applies the new PSK <em>and</em> this device imports a refreshed profile. There is no overlap period.</p>
+              <label class="check"><input type="checkbox" name="confirm" value="yes" required> I understand the interruption</label>
+              <button type="submit" class="danger">Rotate PSK</button>
+            </form>
+          </details>
+        </div></td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+  <p class="hint">Access covers every advertised prefix at the site. Keepalive (seconds, 0 disables) is a client setting with a mobile battery and data cost; changing it requires a profile refresh.</p>
+  {{else}}<p class="muted">No site access yet.</p>{{end}}
+  {{if $d.Unlinked}}
+  <form method="post" action="/devices/{{$d.Device.ID}}/links" class="inline">
+    {{template "csrf" $.CSRF}}
+    <label for="site_id">Grant access to</label>
+    <select id="site_id" name="site_id">{{range $d.Unlinked}}<option value="{{.ID}}">{{.Name}}{{if .Pending}} (awaiting enrollment){{end}}</option>{{end}}</select>
+    <button type="submit">Grant</button>
+  </form>
+  {{end}}
+</section>
+
+{{if $d.Active}}
+<section class="card{{if $d.ChangedSince}} highlight{{end}}" data-replace-key data-device-id="{{$d.Device.ID}}">
+  <h2>Profile</h2>
+  {{if $d.ChangedSince}}
+  <p>This device's configuration changed since its last export. Update it with a new profile.</p>
+  {{else}}
+  <p>The device's profile is current. To show it again, for example on a new phone, issue a new profile.</p>
+  {{end}}
+  <p class="hint">A new key is generated in this browser and the profile is shown here. The current key stops working at every
+    linked site once they apply the change, so the device needs the new profile. Its address, site access, PSKs, and settings
+    stay the same.</p>
+  <label class="check"><input type="checkbox" data-replace-confirm> I understand the current key will be invalidated</label>
+  <button type="button" {{if not $d.ChangedSince}}class="secondary"{{end}} data-replace-generate>Update profile (new key)</button>
+  <p class="banner danger" data-replace-error hidden role="alert"></p>
+</section>
+<div data-replace-result hidden></div>
+{{end}}
+
+<div class="grid">
+<section class="card">
+  <h2>DNS and MTU</h2>
+  <form method="post" action="/devices/{{$d.Device.ID}}/settings">
+    {{template "csrf" $.CSRF}}
+    {{template "client-settings-fields" $d.Settings}}
+    <button type="submit">Save settings</button>
+  </form>
+  <p class="hint">Choosing a resolver does not grant routing to it: an internal resolver must sit inside a linked site's prefixes.</p>
+</section>
+
+<section class="card">
+  <h2>Lifecycle</h2>
+  {{if not $d.Device.Retired}}
+  {{if $d.Device.Enabled}}
+  <form method="post" action="/devices/{{$d.Device.ID}}/disable">{{template "csrf" $.CSRF}}
+    <p>Disabling removes the device from every site's peers. Sites enforce it on their next successful poll.</p>
+    <button type="submit" class="danger">Disable device</button></form>
+  {{else}}
+  <form method="post" action="/devices/{{$d.Device.ID}}/enable">{{template "csrf" $.CSRF}}<button type="submit">Enable device</button></form>
+  {{end}}
+
+  <h3>Retire</h3>
+  <form method="post" action="/devices/{{$d.Device.ID}}/retire">{{template "csrf" $.CSRF}}
+    <p>Permanent. The device is removed everywhere and its address stays reserved.</p>
+    <label class="check"><input type="checkbox" name="confirm" value="yes" required> Retire permanently</label>
+    <button type="submit" class="danger">Retire device</button></form>
+  {{else}}
+  <p>Retired. The address <code>{{$d.Device.AssignedIPv4}}</code> remains reserved until the device is deleted.</p>
+  {{end}}
+
+  <h3>Delete</h3>
+  {{if $d.Active}}
+  <p class="muted">To delete this device, disable or retire it first so its sites remove it.</p>
+  {{else}}
+  <form method="post" action="/devices/{{$d.Device.ID}}/delete">{{template "csrf" $.CSRF}}
+    <p>Permanent. Removes the device, its site access and PSKs, and its settings, and frees <code>{{$d.Device.AssignedIPv4}}</code> for a new device. The audit history is kept.</p>
+    {{if $d.RevocationPending}}
+    <p class="banner warn">A linked site has not yet applied this device's removal, so its gateway may still accept the device's key. Wait for it, or delete anyway if that gateway will not report again.</p>
+    <label class="check"><input type="checkbox" name="force" value="yes"> Delete anyway</label>
+    {{end}}
+    <label class="check"><input type="checkbox" name="confirm" value="yes" required> Delete permanently</label>
+    <button type="submit" class="danger">Delete device</button></form>
+  {{end}}
+</section>
+</div>
+
+<template data-export-template>{{template "export-panel"}}</template>
+<script src="/static/vendor/x25519.js" defer></script>
+<script src="/static/vendor/qrcode.js" defer></script>
+<script src="/static/js/profile.js" defer></script>
+<script src="/static/js/qr.js" defer></script>
+<script src="/static/js/export.js" defer></script>
+{{end}}

@@ -1,0 +1,47 @@
+{{define "content"}}
+{{$d := .Data}}
+<h1>Account</h1>
+<section class="card narrow">
+  <h2>Two-factor authentication</h2>
+  {{if $d.Setup}}
+  <p>Scan this code with an authenticator app, or enter the key by hand. Then enter the 6-digit code it shows.</p>
+  <div class="qr-wrap">
+    <canvas data-otpauth="{{$d.Setup.URI}}" aria-label="Authenticator setup QR code" role="img"></canvas>
+  </div>
+  <p>Key: <code class="secret">{{$d.Setup.Secret}}</code></p>
+  <p class="hint">This key is shown only now. If you leave before confirming, start again; nothing changes until you confirm.</p>
+  <form method="post" action="/account/totp/confirm">
+    {{template "csrf" $.CSRF}}
+    <label for="code">Code from the app</label>
+    <input id="code" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="8" required autofocus>
+    <button type="submit">Turn on two-factor authentication</button>
+  </form>
+  {{else if $d.TOTPEnabled}}
+  <p><span class="pill good">on</span> Logging in requires a code from your authenticator app.</p>
+  <form method="post" action="/account/totp/disable">
+    {{template "csrf" $.CSRF}}
+    <label for="password">Password</label>
+    <input id="password" name="password" type="password" autocomplete="current-password" required>
+    <label for="code">Current code</label>
+    <input id="code" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="8" required>
+    <button type="submit" class="danger">Turn off two-factor authentication</button>
+  </form>
+  <p class="hint">Lost your authenticator? On the controller host, run <code>plaitctl admin totp-reset {{$.User}}</code>.</p>
+  {{else}}
+  <p><span class="pill unknown">off</span> Logging in needs only your password.</p>
+  <p class="hint">With two-factor authentication on, logging in also needs a 6-digit code from an authenticator app.
+    If you lose the app, <code>plaitctl admin totp-reset</code> on the controller host turns it off.</p>
+  <form method="post" action="/account/totp/begin">
+    {{template "csrf" $.CSRF}}
+    <label for="password">Password</label>
+    <input id="password" name="password" type="password" autocomplete="current-password" required>
+    <button type="submit">Set up two-factor authentication</button>
+  </form>
+  {{end}}
+</section>
+{{if $d.Setup}}
+<script src="/static/vendor/qrcode.js" defer></script>
+<script src="/static/js/qr.js" defer></script>
+<script src="/static/js/account.js" defer></script>
+{{end}}
+{{end}}

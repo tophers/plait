@@ -1,0 +1,48 @@
+{{define "content"}}
+<h1>Overview</h1>
+<section class="card">
+  <h2>Sites</h2>
+  {{if .Data.Sites}}
+  <table>
+    <thead><tr><th>Site</th><th>Agent reachable</th><th>Configuration applied</th><th>Local health</th><th>Peers seen</th></tr></thead>
+    <tbody>
+    {{range .Data.Sites}}
+      <tr>
+        <td><a href="/sites/{{.Site.ID}}">{{.Site.Name}}</a>{{if not .Site.Enabled}} <span class="pill unknown">disabled</span>{{end}}</td>
+        <td>{{template "reach" .Status.Reachability}} <span class="muted">{{ago .Status.LastContact}}</span></td>
+        <td>{{template "applied" .Status}}</td>
+        <td>{{template "health" .Status.Health}}{{if .Status.Errors}} <span class="muted">{{len .Status.Errors}} error(s)</span>{{end}}</td>
+        <td>{{len .Status.Peers}}</td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+  <p class="hint">Reachability and health come from live agent reports and are unknown after a controller restart.
+    Applied revisions are durable acknowledgments, not proof a gateway is enforcing them now.</p>
+  {{else}}
+  <p>No sites yet. <a href="/sites/new">Add a site</a>.</p>
+  {{end}}
+</section>
+
+<section class="card">
+  <h2>Devices needing attention</h2>
+  {{if .Data.Attention}}
+  <table>
+    <thead><tr><th>Device</th><th>Issue</th></tr></thead>
+    <tbody>
+    {{range .Data.Attention}}
+      <tr>
+        <td><a href="/devices/{{.Device.ID}}">{{.Device.Name}}</a></td>
+        <td>
+          {{if .RevocationPending}}<span class="pill warn">revocation pending</span>{{end}}
+          {{if .ChangedSince}}<span class="pill warn">configuration changed since last export</span>{{end}}
+        </td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+  {{else}}
+  <p>No devices need attention. <span class="muted">{{.Data.DeviceCount}} device{{if ne .Data.DeviceCount 1}}s{{end}}</span></p>
+  {{end}}
+</section>
+{{end}}

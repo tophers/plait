@@ -1,0 +1,73 @@
+{{define "reach"}}<span class="pill {{if eq . "reachable"}}good{{else if eq . "stale"}}bad{{else}}unknown{{end}}">{{.}}</span>{{end}}
+{{define "health"}}<span class="pill {{if eq . "healthy"}}good{{else if eq . "unhealthy"}}bad{{else}}unknown{{end}}">{{.}}</span>{{end}}
+
+{{define "applied"}}{{/* controller.SiteStatus */}}
+{{if .Pending}}<span class="pill unknown">awaiting enrollment</span>
+{{else if .ChangePending}}<span class="pill warn" title="Acknowledged {{.AppliedRevision}} of {{.DesiredRevision}}">pending r{{.DesiredRevision}}</span> <span class="muted">applied r{{.AppliedRevision}}</span>
+{{else}}<span class="pill good">r{{.AppliedRevision}}</span>{{end}}
+{{if .AheadOfDesired}}<span class="pill bad" title="The agent accepted r{{.AcceptedRevision}}, newer than this controller's r{{.DesiredRevision}}">agent ahead</span>{{end}}
+{{end}}
+
+{{define "csrf"}}<input type="hidden" name="csrf_token" value="{{.}}">{{end}}
+
+{{/* Export panel: the private key is supplied or generated in this browser
+     and never sent to the controller. export.js drives it. */}}
+{{define "export-panel"}}
+<section class="card export" data-export>
+  <h2>Export profile</h2>
+  <p class="muted">The profile is assembled in this browser from a key generated here. The controller supplies everything else;
+    the private key never leaves this page and is not saved. An export record does not prove the device imported it.</p>
+  <p class="banner danger" data-error hidden role="alert"></p>
+  <div data-step="result" hidden>
+    <div class="qr-wrap">
+      <canvas data-qr aria-label="WireGuard profile QR code" role="img"></canvas>
+      <p data-qr-info class="muted"></p>
+    </div>
+    <p>
+      <button type="button" data-download>Download .conf file</button>
+      <button type="button" class="secondary" data-clear>Clear from this page</button>
+    </p>
+    <p class="hint">Keep this page open until the device has scanned the code or imported the file: the private key exists only here,
+      and leaving or clearing the page discards it for good. Clear the page once the device has it.</p>
+  </div>
+</section>
+{{end}}
+
+{{define "site-fields"}}
+<label for="name">Name</label>
+<input id="name" name="name" required maxlength="64" value="{{.Name}}">
+<label for="endpoint_host">Public endpoint (DNS name or IP)</label>
+<input id="endpoint_host" name="endpoint_host" required value="{{.EndpointHost}}">
+<p class="hint">Must be reachable over UDP from roaming devices, directly or by port forwarding.</p>
+<div class="row">
+  <div><label for="listen_port">UDP port</label><input id="listen_port" name="listen_port" inputmode="numeric" value="{{.ListenPort}}"></div>
+  <div><label for="mtu">Gateway MTU</label><input id="mtu" name="mtu" inputmode="numeric" value="{{.MTU}}"></div>
+  <div><label for="egress_interface">LAN interface</label><input id="egress_interface" name="egress_interface" required value="{{.EgressInterface}}" placeholder="enp1s0"></div>
+</div>
+<label for="subnets">Advertised LAN prefixes (one per line)</label>
+<textarea id="subnets" name="subnets" rows="3" placeholder="10.13.37.0/24">{{.Subnets}}</textarea>
+<p class="hint">Every device linked to this site can reach all of these prefixes. Prefixes may not overlap the client pool or, for any one device, another linked site.</p>
+<label for="gateway_tcp_ports">Gateway access from the tunnel (TCP ports)</label>
+<input id="gateway_tcp_ports" name="gateway_tcp_ports" inputmode="numeric" value="{{.GatewayTCPPorts}}" placeholder="none, e.g. 22">
+<p class="hint">Traffic from connected devices to the gateway host itself, including its LAN address, is dropped. List ports here (for example 22 for SSH) to allow them. The host's own firewall must also accept them.</p>
+{{end}}
+
+{{define "client-settings-fields"}}{{/* clientSettingsForm */}}
+    <fieldset>
+      <legend>DNS</legend>
+      <label class="check"><input type="radio" name="dns_mode" value="none" {{if eq .DNSMode "none"}}checked{{end}}> <strong>No tunnel DNS</strong></label>
+      <p class="hint">The device keeps its own DNS. Site IP routing still works; internal names may not resolve.</p>
+      <label class="check"><input type="radio" name="dns_mode" value="internal" {{if eq .DNSMode "internal"}}checked{{end}}> <strong>Internal resolvers</strong></label>
+      <p class="hint">Resolvers must answer for both internal and public names. On tested mobile clients they handle <em>all</em> lookups, so if their site is down, name resolution fails everywhere. Prefer redundant resolvers at independently reachable sites with the same data; no failover order is guaranteed.</p>
+      <label class="check"><input type="radio" name="dns_mode" value="custom" {{if or (eq .DNSMode "custom") (eq .DNSMode "mixed")}}checked{{end}}> <strong>Custom{{if eq .DNSMode "mixed"}}: mixed internal and public resolvers{{end}}</strong></label>
+      <p class="hint">Mixing internal and public resolvers is not a primary/backup setup: private-name queries may reach a public resolver and get a negative answer even while the internal resolver works.</p>
+      <label for="dns_servers">Resolvers, in order (one per line)</label>
+      <textarea id="dns_servers" name="dns_servers" rows="3" placeholder="10.13.37.53">{{.DNSText}}</textarea>
+      <label for="search_domains">Search domains, in order</label>
+      <input id="search_domains" name="search_domains" value="{{.SearchText}}" placeholder="home.lan, cabin.lan">
+      <p class="hint">Separate with commas. Clients use them only when tunnel DNS is set.</p>
+    </fieldset>
+    <label for="mtu">Client MTU override</label>
+    <input id="mtu" name="mtu" inputmode="numeric" value="{{if .MTU}}{{.MTU}}{{end}}" placeholder="leave empty to let the client choose">
+    <p class="hint">Applies to the device's single interface and every site. Independent of gateway MTU.</p>
+{{end}}

@@ -1,0 +1,24 @@
+{{define "content"}}
+<div class="title-row"><h1>Sites</h1><a class="button" href="/sites/new">Add site</a></div>
+<section class="card">
+  {{if .Data}}
+  <table>
+    <thead><tr><th>Site</th><th>Endpoint</th><th>LAN prefixes</th><th>Agent</th><th>Applied</th><th>Health</th></tr></thead>
+    <tbody>
+    {{range .Data}}
+      <tr>
+        <td><a href="/sites/{{.Site.ID}}">{{.Site.Name}}</a>{{if not .Site.Enabled}} <span class="pill unknown">disabled</span>{{end}}</td>
+        <td><code>{{.Site.EndpointHost}}:{{.Site.ListenPort}}</code></td>
+        <td>{{range .Site.Subnets}}<code>{{.}}</code> {{end}}</td>
+        <td>{{template "reach" .Status.Reachability}}</td>
+        <td>{{template "applied" .Status}}</td>
+        <td>{{template "health" .Status.Health}}</td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+  {{else}}
+  <p>No sites yet.</p>
+  {{end}}
+</section>
+{{end}}

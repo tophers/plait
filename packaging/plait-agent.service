@@ -1,0 +1,39 @@
+[Unit]
+Description=Plait site gateway agent
+Documentation=file:///usr/share/doc/plait/agent.md
+Wants=network-online.target
+After=network-online.target nftables.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/plait-agent run -config /etc/plait/agent.json
+Restart=always
+RestartSec=5
+
+# Runs as root with only CAP_NET_ADMIN: enough for rtnetlink, WireGuard
+# generic netlink, and nft. The wireguard module must be loaded at boot
+# (see docs/agent.md) because module loading is not permitted here.
+CapabilityBoundingSet=CAP_NET_ADMIN
+AmbientCapabilities=CAP_NET_ADMIN
+NoNewPrivileges=yes
+UMask=0077
+
+StateDirectory=plait
+StateDirectoryMode=0700
+ProtectSystem=strict
+ReadWritePaths=/var/lib/plait
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+RestrictAddressFamilies=AF_UNIX AF_NETLINK AF_INET AF_INET6
+RestrictNamespaces=yes
+RestrictRealtime=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

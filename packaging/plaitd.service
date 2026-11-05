@@ -1,0 +1,37 @@
+[Unit]
+Description=Plait controller
+Documentation=file:///usr/share/doc/plait/controller.md
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/plaitd -config /etc/plait/plaitd.json
+Restart=on-failure
+RestartSec=5
+# A static system user (useradd --system plaitd), not DynamicUser: plaitctl
+# opens the same database and PSK key directly and must run as this user
+# (sudo -u plaitd plaitctl ...). psk.key and the TLS key are owned by plaitd,
+# mode 0600; plaitd refuses a PSK key readable by group or others.
+User=plaitd
+Group=plaitd
+StateDirectory=plaitd
+StateDirectoryMode=0700
+UMask=0077
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

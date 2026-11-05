@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+{{if .CSRF}}<meta name="csrf-token" content="{{.CSRF}}">{{end}}
+<meta name="htmx-config" content='{"includeIndicatorStyles":false,"allowEval":false,"allowScriptTags":false,"selfRequestsOnly":true}'>
+<title>{{.Title}} · Plait</title>
+<link rel="stylesheet" href="/static/css/app.css">
+<script src="/static/vendor/htmx.min.js" defer></script>
+<script src="/static/js/app.js" defer></script>
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="/">Plait</a>
+  {{if .User}}
+  <nav aria-label="Main">
+    <a href="/" {{if eq .Nav "overview"}}aria-current="page"{{end}}>Overview</a>
+    <a href="/sites" {{if eq .Nav "sites"}}aria-current="page"{{end}}>Sites</a>
+    <a href="/devices" {{if eq .Nav "devices"}}aria-current="page"{{end}}>Devices</a>
+    <a href="/audit" {{if eq .Nav "audit"}}aria-current="page"{{end}}>Audit</a>
+  </nav>
+  <form method="post" action="/logout" class="logout">
+    <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+    <a href="/account" {{if eq .Nav "account"}}aria-current="page"{{end}}>{{.User}}</a> <button type="submit" class="link">Log out</button>
+  </form>
+  {{end}}
+</header>
+<main>
+  {{if .Recovery}}
+  <div class="banner danger" role="alert">
+    <strong>Controller in recovery.</strong> Agents receive no desired state until recovery is completed with
+    <code>plaitctl recover complete</code>. Re-apply changes made after the restored backup first.
+  </div>
+  {{end}}
+  {{if .Flash}}<div class="banner {{if .FlashErr}}danger{{else}}ok{{end}}" role="{{if .FlashErr}}alert{{else}}status{{end}}">{{.Flash}}</div>{{end}}
+  {{template "content" .}}
+</main>
+</body>
+</html>

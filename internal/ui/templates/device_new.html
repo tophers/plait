@@ -1,0 +1,37 @@
+{{define "content"}}
+<h1>Add device</h1>
+<section class="card narrow" data-enroll>
+  <form data-enroll-form>
+    <label for="name">Name</label>
+    <input id="name" name="name" required maxlength="64" autocomplete="off">
+
+    <fieldset>
+      <legend>Site access</legend>
+      {{range .Data.Sites}}
+      <label class="check"><input type="checkbox" name="site" value="{{.ID}}"> {{.Name}} <span class="muted">{{range .Subnets}}{{.}} {{end}}</span></label>
+      {{else}}
+      <p class="muted">No enrolled sites yet. You can grant access later.</p>
+      {{end}}
+      {{if .Data.Sites}}
+      <label for="keepalive">Keepalive (seconds, 0 disables)</label>
+      <input id="keepalive" name="keepalive" inputmode="numeric" value="{{.Data.Keepalive}}" size="5">
+      <p class="hint">Applies to each site granted here and can be changed per site later. It has a mobile battery and data cost.</p>
+      {{end}}
+    </fieldset>
+
+    <h2>DNS and MTU</h2>
+    {{template "client-settings-fields" .Data.Settings}}
+    <p class="hint">Choosing a resolver does not grant routing to it: an internal resolver must sit inside a granted site's prefixes.</p>
+    <button type="submit">Create device</button>
+  </form>
+  <p class="banner danger" data-enroll-error hidden role="alert"></p>
+  <p class="hint">A new key is generated in this browser; only its public half is sent to the controller. The private key exists only in this page until the device imports the profile. Leaving the page before then loses it; you would then need to replace the key.</p>
+</section>
+<div data-enroll-result hidden></div>
+<template data-export-template>{{template "export-panel"}}</template>
+<script src="/static/vendor/x25519.js" defer></script>
+<script src="/static/vendor/qrcode.js" defer></script>
+<script src="/static/js/profile.js" defer></script>
+<script src="/static/js/qr.js" defer></script>
+<script src="/static/js/export.js" defer></script>
+{{end}}

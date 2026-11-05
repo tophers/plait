@@ -1,0 +1,23 @@
+{{define "content"}}
+<div class="title-row"><h1>Devices</h1><a class="button" href="/devices/new">Add device</a></div>
+<section class="card">
+  {{if .Data}}
+  <table>
+    <thead><tr><th>Device</th><th>Address</th><th>State</th><th>Profile</th><th>Last export</th></tr></thead>
+    <tbody>
+    {{range .Data}}
+      <tr>
+        <td><a href="/devices/{{.Device.ID}}">{{.Device.Name}}</a></td>
+        <td><code>{{.Device.AssignedIPv4}}</code></td>
+        <td>{{.State}}{{if .RevocationPending}} <span class="pill warn">revocation pending</span>{{end}}</td>
+        <td>r{{.Device.ProfileRevision}}{{if .ChangedSince}} <span class="pill warn">changed since export</span>{{end}}</td>
+        <td>{{if .Export.Revision}}r{{.Export.Revision}} <span class="muted">{{ago .Export.At}}</span>{{else}}<span class="muted">never</span>{{end}}</td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+  {{else}}
+  <p>No devices yet.</p>
+  {{end}}
+</section>
+{{end}}

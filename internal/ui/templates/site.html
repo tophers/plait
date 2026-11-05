@@ -1,0 +1,115 @@
+{{define "content"}}
+{{$d := .Data}}
+<div class="title-row">
+  <h1>{{$d.Site.Name}}</h1>
+  {{if not $d.Site.Enabled}}<span class="pill unknown">disabled</span>{{end}}
+  {{if $d.Site.Pending}}<span class="pill warn">awaiting enrollment</span>{{end}}
+</div>
+
+{{if $d.Token}}
+<section class="card highlight" role="status">
+  <h2>Enrollment token</h2>
+  <p>Shown once. Valid until {{$d.TokenExpires.UTC.Format "2006-01-02 15:04 UTC"}}, single use. Run on the gateway:</p>
+  <pre class="copy"><code>plait-agent enroll -controller {{$d.ControllerURL}} -token {{$d.Token}}{{if $d.CAFingerprint}} -ca-fingerprint {{$d.CAFingerprint}}{{end}}</code></pre>
+  {{if $d.CAFingerprint}}<p class="hint">This controller uses its own certificate authority. The gateway checks it against the fingerprint above and keeps a copy. Browsers can trust it too: <a href="/ca.pem">download the CA</a>.</p>{{end}}
+  {{if not $d.Site.Pending}}<p class="banner danger">This site is already enrolled. Using this token replaces its gateway key and revokes the current gateway's credentials. Every linked device must then import a refreshed profile.</p>{{end}}
+</section>
+{{end}}
+
+{{template "site-status" $d}}
+
+<div class="grid">
+<section class="card">
+  <h2>Configuration</h2>
+  <form method="post" action="/sites/{{$d.Site.ID}}">
+    {{template "csrf" $.CSRF}}
+    {{template "site-fields" $d.Form}}
+    <button type="submit">Save</button>
+  </form>
+  <dl class="facts">
+    <dt>Gateway public key</dt><dd>{{if $d.Site.Pending}}<span class="muted">not enrolled</span>{{else}}<code>{{$d.Site.PublicKey}}</code>{{end}}</dd>
+    <dt>TCP MSS clamp</dt><dd>{{$d.MSS}} (gateway MTU − 40), applied only when larger</dd>
+    <dt>Desired revision</dt><dd>r{{$d.Site.DesiredRevision}}</dd>
+  </dl>
+</section>
+
+<section class="card">
+  <h2>Gateway enrollment</h2>
+  <form method="post" action="/sites/{{$d.Site.ID}}/enrollment-token">
+    {{template "csrf" $.CSRF}}
+    <button type="submit">{{if $d.Site.Pending}}Issue enrollment token{{else}}Issue token to replace gateway key{{end}}</button>
+  </form>
+  <h3>Agent credentials</h3>
+  {{if $d.Credentials}}
+  <table>
+    <thead><tr><th>ID</th><th>Created</th><th>State</th></tr></thead>
+    <tbody>
+    {{range $d.Credentials}}
+      <tr><td><code>{{printf "%.8s" .ID}}</code></td><td>{{ago .CreatedAt}}</td>
+        <td>{{if .Active}}<span class="pill good">active</span>{{if .ExpiresAt}} <span class="muted">expires {{ago .ExpiresAt}}</span>{{end}}{{else if .RevokedAt}}<span class="pill unknown">revoked</span>{{else}}<span class="pill unknown">expired</span>{{end}}</td></tr>
+    {{end}}
+    </tbody>
+  </table>
+  <form method="post" action="/sites/{{$d.Site.ID}}/credentials/revoke">
+    {{template "csrf" $.CSRF}}
+    <button type="submit" class="danger">Revoke all credentials</button>
+  </form>
+  <p class="hint">Revoking blocks controller access only. The gateway keeps enforcing its cached peers until changed locally or re-enrolled.</p>
+  {{else}}<p class="muted">None.</p>{{end}}
+</section>
+</div>
+
+<div class="grid">
+<section class="card">
+  <h2>Linked devices</h2>
+  {{if $d.Linked}}
+  <ul class="plain">{{range $d.Linked}}<li><a href="/devices/{{.Device.ID}}">{{.Device.Name}}</a> <code>{{.Device.AssignedIPv4}}</code> <span class="muted">{{.State}}</span>{{if .RevocationPending}} <span class="pill warn">revocation pending</span>{{end}}</li>{{end}}</ul>
+  {{else}}<p class="muted">No devices are linked to this site.</p>{{end}}
+</section>
+
+<section class="card">
+  <h2>{{if $d.Site.Enabled}}Disable site{{else}}Enable site{{end}}</h2>
+  {{if $d.Site.Enabled}}
+  <p>Disabling sends the gateway an empty peer set and denies all tunnel forwarding. Its credential stays valid so it can receive the change.</p>
+  {{if $d.DNSDependents}}<p class="banner danger">Name resolution depends on this site for: {{join $d.DNSDependents ", "}}. Their DNS fails while this site is unavailable, even where other sites still work.</p>{{end}}
+  <form method="post" action="/sites/{{$d.Site.ID}}/disable">
+    {{template "csrf" $.CSRF}}
+    <label class="check"><input type="checkbox" name="confirm" value="yes" required> I understand {{len $d.Linked}} linked device(s) lose access to this site</label>
+    <button type="submit" class="danger">Disable site</button>
+  </form>
+  {{else}}
+  <form method="post" action="/sites/{{$d.Site.ID}}/enable">{{template "csrf" $.CSRF}}<button type="submit">Enable site</button></form>
+  {{end}}
+</section>
+</div>
+{{end}}
+
+{{define "site-status"}}
+<section class="card" id="site-status" hx-get="/sites/{{.Site.ID}}/status" hx-trigger="every 10s" hx-swap="outerHTML">
+  <h2>Status</h2>
+  <div class="facts-grid">
+    <div><h3>Agent reachable</h3>{{template "reach" .Status.Reachability}}<p class="muted">last contact {{ago .Status.LastContact}}{{if .Status.AgentVersion}} · agent {{.Status.AgentVersion}}{{end}}</p></div>
+    <div><h3>Configuration applied</h3>{{template "applied" .Status}}<p class="muted">{{if .Status.AppliedAt}}acknowledged {{ago .Status.AppliedAt}}{{else}}never acknowledged{{end}}</p></div>
+    <div><h3>Local health</h3>{{template "health" .Status.Health}}<p class="muted">{{if .Status.ObservedAt}}observed {{ago .Status.ObservedAt}}{{else}}no live report{{end}}</p></div>
+    <div><h3>Peer activity</h3><strong>{{len .Peers}}</strong> peer(s) reported<p class="muted">silence does not mean a device is offline</p></div>
+  </div>
+  {{if .Status.Errors}}
+  <h3>Errors</h3>
+  <ul class="plain">{{range .Status.Errors}}<li><code>{{.Component}}/{{.Code}}</code> {{.Message}}</li>{{end}}</ul>
+  {{end}}
+  {{if .Status.Warnings}}
+  <h3>Warnings</h3>
+  <ul class="plain">{{range .Status.Warnings}}<li>{{.}}</li>{{end}}</ul>
+  {{end}}
+  {{if and (not .Status.Errors) .Status.LastError}}<p class="muted">Last recorded error: {{.Status.LastError}}</p>{{end}}
+  {{if .Peers}}
+  <h3>Peers</h3>
+  <table>
+    <thead><tr><th>Device</th><th>Last handshake</th><th>Received</th><th>Sent</th></tr></thead>
+    <tbody>{{range .Peers}}<tr><td><a href="/devices/{{.DeviceID}}">{{.DeviceName}}</a></td><td>{{agoTime .LastHandshake}}</td><td>{{bytes .Rx}}</td><td>{{bytes .Tx}}</td></tr>{{end}}</tbody>
+  </table>
+  <p class="hint">A handshake shows the tunnel formed; it does not prove LAN or DNS access.</p>
+  {{end}}
+  {{if eq .Status.Reachability "stale"}}<p class="banner danger">This agent has not reported recently. Changes, including revocations, are not enforced at this site until it reconnects.</p>{{end}}
+</section>
+{{end}}

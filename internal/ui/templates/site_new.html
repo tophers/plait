@@ -1,0 +1,11 @@
+{{define "content"}}
+<h1>Add site</h1>
+<section class="card narrow">
+  <form method="post" action="/sites">
+    {{template "csrf" .CSRF}}
+    {{template "site-fields" .Data}}
+    <button type="submit">Create site</button>
+  </form>
+  <p class="hint">The site starts pending. Its gateway generates its own key and enrolls with a single-use token you issue next.</p>
+</section>
+{{end}}
